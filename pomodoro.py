@@ -4,8 +4,8 @@ from pico_i2c_lcd import I2cLcd
 
 __author__ = "Bartek Blachura"
 __copyright__ = "Copyright 2022, Pomodoro Timer"
-__version__ = "1.0.0"
-__date__ = "31.03.2022"
+__version__ = "2.0.0"
+__date__ = "02.04.2022"
 
 
 work = 25 * 60  # minutes to seconds
@@ -23,48 +23,37 @@ I2C_NUM_COLS = 16
 lcd = I2cLcd(i2c, I2C_ADDR, I2C_NUM_ROWS, I2C_NUM_COLS)
 
 
-def work_time(seconds):
-    stopwatch = seconds
+def pomodoro_timer(pomodoro, seconds):
+    time_start = time.time()
+    while seconds > 0:
+        time_current = time.time()
+        if (time_current - time_start) >= 1:
+            time_start = time_current
 
-    while stopwatch > 0:
-        left_minutes = stopwatch // 60
-        left_seconds = stopwatch - (left_minutes * 60)
-        if left_minutes < 10:
-            left_minutes = "0" + str(left_minutes)
-        if left_seconds < 10:
-            left_seconds = "0" + str(left_seconds)
+            screen_time_left(pomodoro, seconds)
 
-        screen_time_left("time to work", f"{left_minutes}:{left_seconds}")
-        stopwatch -= 1
-        time.sleep(1)
+            seconds -= 1
 
+    screen_time_left(pomodoro, 0)
+    time.sleep(1)
     screen_press_button()
 
 
-def break_time(seconds):
-    stopwatch = seconds
+def screen_time_left(pomodoro, seconds):
+    left_minutes = seconds // 60
+    left_seconds = seconds - (left_minutes * 60)
+    if left_minutes < 10:
+        left_minutes = "0" + str(left_minutes)
+    if left_seconds < 10:
+        left_seconds = "0" + str(left_seconds)
 
-    while stopwatch > 0:
-        left_minutes = stopwatch // 60
-        left_seconds = stopwatch - (left_minutes * 60)
-        if left_minutes < 10:
-            left_minutes = "0" + str(left_minutes)
-        if left_seconds < 10:
-            left_seconds = "0" + str(left_seconds)
-
-        screen_time_left("time for a break", f"{left_minutes}:{left_seconds}")
-        stopwatch -= 1
-        time.sleep(1)
-
-    screen_press_button()
-
-
-def screen_time_left(message_1, message_2):
     lcd.clear()
     lcd.move_to(0, 0)
-    lcd.putstr(message_1)
+    lcd.putstr(pomodoro)
     lcd.move_to(11, 1)
-    lcd.putstr(message_2)
+    lcd.putstr(f"{left_minutes}:{left_seconds}")
+
+    print(f"{pomodoro} - {left_minutes}:{left_seconds}")
 
 
 def screen_hello():
@@ -73,23 +62,21 @@ def screen_hello():
     lcd.putstr("pomodoro timer")
     lcd.move_to(1, 1)
     lcd.putstr("--------------")
-    time.sleep(2)
+    time.sleep(1)
 
     lcd.clear()
     lcd.move_to(0, 0)
     lcd.putstr(f"version: {__version__}")
     lcd.move_to(6, 1)
-    lcd.putstr(__date__)
-    time.sleep(2)
+    lcd.putstr(f"{__date__}")
+    time.sleep(1)
 
     lcd.clear()
     lcd.move_to(0, 0)
     lcd.putstr("author:")
     lcd.move_to(0, 1)
-    lcd.putstr(__author__)
-    time.sleep(2)
-
-    screen_press_button()
+    lcd.putstr(f"{__author__}")
+    time.sleep(1)
 
 
 def screen_press_button():
@@ -100,13 +87,15 @@ def screen_press_button():
     lcd.putstr("to start")
 
 
-button = machine.Pin(14, machine.Pin.IN, machine.Pin.PULL_DOWN)
+button = machine.Pin(13, machine.Pin.IN, machine.Pin.PULL_DOWN)
 
 builtin_led = machine.Pin(25, machine.Pin.OUT)
-led_external = machine.Pin(15, machine.Pin.OUT)
+led_red = machine.Pin(14, machine.Pin.OUT)
+led_green = machine.Pin(15, machine.Pin.OUT)
 
 builtin_led.value(0)
-led_external.value(0)
+led_green.value(0)
+led_red.value(0)
 
 work_phase = False
 break_phase = False
@@ -115,6 +104,7 @@ time_to_break = False
 pomodoro_count = 0
 
 screen_hello()
+screen_press_button()
 
 while True:
     if not work_phase and not break_phase:
@@ -129,23 +119,23 @@ while True:
                 builtin_led.value(0)
 
     if work_phase:
-        led_external.value(1)
+        led_red.value(1)
 
-        work_time(work)
+        pomodoro_timer("stay focused", work)
 
         pomodoro_count += 1
-        led_external.value(0)
+        led_red.value(0)
         work_phase = False
         time_to_break = True
 
     if break_phase:
-        led_external.value(1)
+        led_green.value(1)
 
         if (pomodoro_count % 4) == 0:
-            break_time(long_break)
+            pomodoro_timer("long break", long_break)
         else:
-            break_time(short_break)
+            pomodoro_timer("short break", short_break)
 
-        led_external.value(0)
+        led_green.value(0)
         break_phase = False
         time_to_break = False
